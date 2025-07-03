@@ -122,15 +122,18 @@ backend:
   
   - task: "Discovery Feed API"
     implemented: true
-    working: "NA"
+    working: true
     file: "server.py, models/discovery.py"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"
         comment: "Implemented Pinterest-style discovery feed with mock data initialization"
+      - working: true
+        agent: "testing"
+        comment: "Successfully tested discovery feed API. The endpoint returns mock data correctly and allows creation of new discovery items. Mock data is initialized on startup as expected."
   
   - task: "Ride Booking System"
     implemented: true
