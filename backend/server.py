@@ -14,6 +14,8 @@ from passlib.context import CryptContext
 import random
 
 # Import models
+import sys
+sys.path.append('/app/backend')
 from models.user import UserCreate, UserResponse, UserLogin, UserUpdate
 from models.ride import RideRequest, RideResponse, RideOption, RideType, RideStatus
 from models.trip import TripCreate, TripResponse
