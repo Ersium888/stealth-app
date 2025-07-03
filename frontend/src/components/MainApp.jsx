@@ -1,16 +1,130 @@
-import { useState } from "react";
-import { Camera, Search, Car, User, MapPin, Clock, Star, Settings, History } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Camera, Search, Car, User, MapPin, Clock, Star, Settings, History, Plus } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "./ui/avatar";
 import { Badge } from "./ui/badge";
-import { mockData } from "../data/mockData";
+import { useToast } from "../hooks/use-toast";
+import { discoveryAPI, rideAPI, tripAPI } from "../services/api";
+import { useAuth } from "../context/AuthContext";
 
 const MainApp = () => {
   const [activeTab, setActiveTab] = useState("camera");
   const [fromLocation, setFromLocation] = useState("");
   const [toLocation, setToLocation] = useState("");
+  const [discoveryItems, setDiscoveryItems] = useState([]);
+  const [rideOptions, setRideOptions] = useState([]);
+  const [userTrips, setUserTrips] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
+  const { user, isAuthenticated } = useAuth();
+
+  // Load discovery items
+  useEffect(() => {
+    const loadDiscoveryItems = async () => {
+      try {
+        const items = await discoveryAPI.getDiscoveryItems();
+        setDiscoveryItems(items);
+      } catch (error) {
+        console.error('Failed to load discovery items:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load discovery items",
+          variant: "destructive",
+        });
+      }
+    };
+    loadDiscoveryItems();
+  }, [toast]);
+
+  // Load user trips when authenticated
+  useEffect(() => {
+    if (isAuthenticated && activeTab === "profile") {
+      const loadUserTrips = async () => {
+        try {
+          const trips = await tripAPI.getUserTrips();
+          setUserTrips(trips);
+        } catch (error) {
+          console.error('Failed to load user trips:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load trip history",
+            variant: "destructive",
+          });
+        }
+      };
+      loadUserTrips();
+    }
+  }, [isAuthenticated, activeTab, toast]);
+
+  // Load ride options when locations are entered
+  useEffect(() => {
+    if (fromLocation && toLocation) {
+      const loadRideOptions = async () => {
+        try {
+          setLoading(true);
+          // Mock coordinates for now
+          const options = await rideAPI.getRideOptions(40.7128, -74.0060, 40.7589, -73.9851);
+          setRideOptions(options);
+        } catch (error) {
+          console.error('Failed to load ride options:', error);
+          toast({
+            title: "Error",
+            description: "Failed to load ride options",
+            variant: "destructive",
+          });
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadRideOptions();
+    }
+  }, [fromLocation, toLocation, toast]);
+
+  const handleRequestRide = async (rideType) => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to request a ride",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const rideRequest = {
+        pickup_location: {
+          address: fromLocation,
+          latitude: 40.7128,
+          longitude: -74.0060
+        },
+        destination_location: {
+          address: toLocation,
+          latitude: 40.7589,
+          longitude: -73.9851
+        },
+        ride_type: rideType,
+        estimated_fare: rideOptions.find(opt => opt.type === rideType)?.estimated_fare || 0
+      };
+
+      const ride = await rideAPI.createRideRequest(rideRequest);
+      toast({
+        title: "Ride Requested!",
+        description: `Your ${rideType} ride has been requested. Driver: ${ride.driver_name}`,
+      });
+    } catch (error) {
+      console.error('Failed to request ride:', error);
+      toast({
+        title: "Error",
+        description: "Failed to request ride. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const TabButton = ({ id, icon: Icon, label, isActive, onClick }) => (
     <button
@@ -48,7 +162,13 @@ const MainApp = () => {
 
       {/* Center capture button */}
       <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-10">
-        <button className="w-24 h-24 bg-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95">
+        <button 
+          className="w-24 h-24 bg-white rounded-full shadow-2xl flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
+          onClick={() => toast({
+            title: "Snap!",
+            description: "Camera feature coming soon! 📸",
+          })}
+        >
           <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
             <Camera size={32} className="text-white" />
           </div>
@@ -86,13 +206,13 @@ const MainApp = () => {
 
         {/* Pinterest-style staggered grid */}
         <div className="columns-2 gap-4 space-y-4">
-          {mockData.discoveries.map((item, index) => (
+          {discoveryItems.map((item, index) => (
             <Card key={index} className="break-inside-avoid border-0 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-2 bg-white/80 backdrop-blur-sm">
               <div className="aspect-square bg-gradient-to-br from-purple-200 to-pink-200 rounded-t-lg relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-400/20 to-pink-400/20"></div>
                 <div className="absolute bottom-4 left-4 right-4">
                   <div className="bg-white/90 rounded-full px-3 py-1 backdrop-blur-sm">
-                    <span className="text-sm font-medium">{item.location}</span>
+                    <span className="text-sm font-medium">{item.location?.address || item.location}</span>
                   </div>
                 </div>
               </div>
@@ -100,12 +220,12 @@ const MainApp = () => {
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-semibold text-gray-800">{item.title}</span>
                   <Badge variant="secondary" className="bg-purple-100 text-purple-700">
-                    {item.price}
+                    {item.formatted_price || `$${item.estimated_fare}`}
                   </Badge>
                 </div>
                 <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <Clock size={14} />
-                  <span>{item.time}</span>
+                  <span>{item.estimated_time}</span>
                   <Star size={14} className="text-yellow-400 fill-current" />
                   <span>{item.rating}</span>
                 </div>
@@ -158,39 +278,53 @@ const MainApp = () => {
         </div>
 
         {/* Ride options */}
-        <div className="space-y-3 mb-6">
-          {mockData.rideOptions.map((option, index) => (
-            <Card key={index} className="border-2 border-gray-200 hover:border-blue-400 transition-all duration-300 cursor-pointer hover:shadow-lg bg-white/80 backdrop-blur-sm">
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-indigo-400 rounded-full flex items-center justify-center">
-                      <Car size={20} className="text-white" />
+        {rideOptions.length > 0 && (
+          <div className="space-y-3 mb-6">
+            {rideOptions.map((option, index) => (
+              <Card key={index} className="border-2 border-gray-200 hover:border-blue-400 transition-all duration-300 cursor-pointer hover:shadow-lg bg-white/80 backdrop-blur-sm">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-indigo-400 rounded-full flex items-center justify-center">
+                        <Car size={20} className="text-white" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold">{option.type}</h3>
+                        <p className="text-sm text-gray-600">{option.estimated_time}</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold">{option.type}</h3>
-                      <p className="text-sm text-gray-600">{option.time}</p>
+                    <div className="text-right">
+                      <p className="font-bold text-lg">${option.estimated_fare?.toFixed(2)}</p>
+                      <div className="flex items-center">
+                        <Star size={14} className="text-yellow-400 fill-current" />
+                        <span className="text-sm ml-1">{option.rating}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-lg">{option.price}</p>
-                    <div className="flex items-center">
-                      <Star size={14} className="text-yellow-400 fill-current" />
-                      <span className="text-sm ml-1">{option.rating}</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
 
         {/* Request button */}
         <Button 
           size="lg" 
           className="w-full h-14 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-lg font-bold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105"
+          onClick={() => {
+            if (rideOptions.length > 0) {
+              handleRequestRide(rideOptions[0].type);
+            } else {
+              toast({
+                title: "Enter locations",
+                description: "Please enter pickup and destination locations",
+                variant: "destructive",
+              });
+            }
+          }}
+          disabled={loading || !fromLocation || !toLocation}
         >
-          Request V
+          {loading ? "Requesting..." : "Request V"}
         </Button>
       </div>
     </div>
@@ -202,17 +336,17 @@ const MainApp = () => {
         {/* Profile header */}
         <div className="flex items-center space-x-4 mb-8">
           <Avatar className="w-20 h-20 border-4 border-white shadow-lg">
-            <AvatarImage src="/api/placeholder/80/80" />
+            <AvatarImage src={user?.profile_image} />
             <AvatarFallback className="bg-gradient-to-br from-purple-500 to-pink-500 text-white text-xl font-bold">
-              JD
+              {user ? user.full_name.split(' ').map(n => n[0]).join('') : 'U'}
             </AvatarFallback>
           </Avatar>
           <div>
-            <h1 className="text-2xl font-bold">John Doe</h1>
+            <h1 className="text-2xl font-bold">{user?.full_name || 'User'}</h1>
             <p className="text-gray-600">Premium Rider</p>
             <div className="flex items-center mt-1">
               <Star size={16} className="text-yellow-400 fill-current" />
-              <span className="text-sm ml-1">4.9 Rating</span>
+              <span className="text-sm ml-1">{user?.rating || 4.9} Rating</span>
             </div>
           </div>
         </div>
@@ -224,27 +358,34 @@ const MainApp = () => {
             Recent Trips
           </h2>
           <div className="space-y-3">
-            {mockData.recentTrips.map((trip, index) => (
-              <Card key={index} className="border-0 shadow-md hover:shadow-lg transition-shadow bg-white/80 backdrop-blur-sm">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-indigo-400 rounded-full flex items-center justify-center">
-                        <Car size={16} className="text-white" />
+            {userTrips.length > 0 ? (
+              userTrips.map((trip, index) => (
+                <Card key={index} className="border-0 shadow-md hover:shadow-lg transition-shadow bg-white/80 backdrop-blur-sm">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-indigo-400 rounded-full flex items-center justify-center">
+                          <Car size={16} className="text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium">{trip.route}</p>
+                          <p className="text-sm text-gray-600">{trip.formatted_date}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium">{trip.route}</p>
-                        <p className="text-sm text-gray-600">{trip.date}</p>
+                      <div className="text-right">
+                        <p className="font-bold">{trip.formatted_fare}</p>
+                        <p className="text-sm text-gray-600">{trip.formatted_duration}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold">{trip.amount}</p>
-                      <p className="text-sm text-gray-600">{trip.duration}</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <Car size={48} className="mx-auto mb-4 text-gray-300" />
+                <p>No trips yet. Start exploring!</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -255,7 +396,14 @@ const MainApp = () => {
             Settings
           </h2>
           <div className="space-y-2">
-            {mockData.settingsOptions.map((option, index) => (
+            {[
+              { label: "Payment Methods", value: "payment" },
+              { label: "Ride Preferences", value: "preferences" },
+              { label: "Notification Settings", value: "notifications" },
+              { label: "Privacy & Security", value: "privacy" },
+              { label: "Help & Support", value: "support" },
+              { label: "About", value: "about" }
+            ].map((option, index) => (
               <Card key={index} className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-pointer bg-white/80 backdrop-blur-sm">
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
