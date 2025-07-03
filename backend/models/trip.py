@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+import sys
+sys.path.append('/app/backend')
 from models.ride import Location, RideType
 import uuid
 
