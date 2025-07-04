@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
-import 'routing.dart'; // Import for appRoutes
-import 'screens/main_screen.dart'; // Import for MainScreen as home
+import 'package:firebase_core/firebase_core.dart'; // Import Firebase Core
+import 'firebase_options.dart'; // Import the options file
+import 'routing.dart';
+import 'screens/main_screen.dart';
 
-void main() {
-  // As per ChatGPT's instructions, Firebase init is not here yet.
-  // WidgetsFlutterBinding.ensureInitialized();
-  // await Firebase.initializeApp();
+void main() async { // Make main async
+  WidgetsFlutterBinding.ensureInitialized(); // Ensure bindings are initialized
+  await Firebase.initializeApp( // Initialize Firebase
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const SwiftTaskerApp());
 }
 

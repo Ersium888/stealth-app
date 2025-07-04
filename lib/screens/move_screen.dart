@@ -1,59 +1,52 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Required for QueryDocumentSnapshot
+import '../services/firestore_service.dart'; // Import FirestoreService
 
 class MoveScreen extends StatelessWidget {
   const MoveScreen({super.key});
 
-  // Controllers for TextFields - manage their text.
-  // In a StatefulWidget, these would be initialized in initState and disposed in dispose.
-  // For a StatelessWidget, they are typically passed in or created directly if not needing disposal logic here.
-  // For this placeholder, creating them directly is fine.
   static final TextEditingController _pickupController = TextEditingController();
   static final TextEditingController _destinationController = TextEditingController();
 
+  // Instance of FirestoreService
+  static final FirestoreService _firestoreService = FirestoreService();
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context); // Access theme for consistent styling
+    final theme = Theme.of(context);
 
     return Scaffold(
-      // Using AppBar for a consistent screen title look, can be removed if not desired
       appBar: AppBar(
-        title: const Text('Set Route'), // Ambiguous title
-        centerTitle: true, // Common practice for mobile titles
+        title: const Text('Set Route'),
+        centerTitle: true,
       ),
-      body: SingleChildScrollView( // Allows content to scroll if it overflows
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            // Pickup Location TextField
             TextField(
               controller: _pickupController,
               decoration: InputDecoration(
-                hintText: 'Pickup Location', // Ambiguous placeholder
+                hintText: 'Pickup Location',
                 prefixIcon: Icon(Icons.location_searching, color: theme.colorScheme.primary),
-                // Using inputDecorationTheme from main.dart
               ),
               style: theme.textTheme.bodyLarge,
             ),
             const SizedBox(height: 16.0),
-
-            // Destination TextField
             TextField(
               controller: _destinationController,
               decoration: InputDecoration(
-                hintText: 'Destination', // Ambiguous placeholder
+                hintText: 'Destination',
                 prefixIcon: Icon(Icons.location_on_outlined, color: theme.colorScheme.primary),
-                // Using inputDecorationTheme from main.dart
               ),
               style: theme.textTheme.bodyLarge,
             ),
             const SizedBox(height: 24.0),
-
-            // Map Placeholder
             Container(
-              height: 250, // Adjust height as needed
+              height: 200, // Reduced height slightly to accommodate list below
               decoration: BoxDecoration(
-                color: Colors.grey[300], // Placeholder color
+                color: Colors.grey[300],
                 borderRadius: BorderRadius.circular(12.0),
                 border: Border.all(color: Colors.grey[400]!)
               ),
@@ -61,7 +54,7 @@ class MoveScreen extends StatelessWidget {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.map_outlined, size: 60, color: Colors.grey[600]),
+                    Icon(Icons.map_outlined, size: 50, color: Colors.grey[600]), // Reduced size
                     const SizedBox(height: 8),
                     Text(
                       'Map Area',
@@ -71,24 +64,91 @@ class MoveScreen extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 32.0),
-
-            // Action Button
+            const SizedBox(height: 24.0), // Reduced spacing
             ElevatedButton(
-              onPressed: () {
-                // Action for the button - e.g., process locations
-                // For now, just a placeholder action or could show a SnackBar
+              onPressed: () async {
                 final pickup = _pickupController.text;
                 final destination = _destinationController.text;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Pickup: $pickup, Destination: $destination (Placeholder Action)'),
-                    backgroundColor: theme.colorScheme.secondary,
-                  ),
+                if (pickup.isNotEmpty && destination.isNotEmpty) {
+                  // Example: Add data to Firestore
+                  try {
+                    await _firestoreService.addMove({
+                      'title': '$pickup to $destination', // Example title from inputs
+                      'pickup': pickup,
+                      'destination': destination,
+                      'description': 'A requested move from $pickup to $destination.',
+                      // 'createdAt' will be added by the service
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: const Text('Move data submitted to Firestore!'),
+                        backgroundColor: theme.colorScheme.secondary,
+                      ),
+                    );
+                    _pickupController.clear();
+                    _destinationController.clear();
+                  } catch (e) {
+                     ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to submit move: $e'),
+                        backgroundColor: theme.colorScheme.error,
+                      ),
+                    );
+                  }
+                } else {
+                   ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Please enter pickup and destination.'),
+                      backgroundColor: theme.colorScheme.error,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Submit Move Request'), // Updated button text
+            ),
+            const SizedBox(height: 24.0),
+            Text("Recent Moves (from Firestore):", style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8.0),
+            // StreamBuilder to display moves from Firestore
+            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _firestoreService.getMovesStream(), // Using the renamed method
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Text('Error: ${snapshot.error}', style: TextStyle(color: theme.colorScheme.error));
+                }
+                if (!snapshot.hasData || snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final docs = snapshot.data!.docs;
+                if (docs.isEmpty) {
+                  return const Center(child: Text('No moves recorded yet.'));
+                }
+                return ListView.builder(
+                  shrinkWrap: true, // Important for ListView inside SingleChildScrollView
+                  physics: const NeverScrollableScrollPhysics(), // Disable ListView's own scrolling
+                  itemCount: docs.length,
+                  itemBuilder: (_, i) {
+                    final d = docs[i].data();
+                    // Safely access fields with null checks or default values
+                    final title = d['title'] as String? ?? 'No title';
+                    final description = d['description'] as String? ?? 'No description';
+                    final timestamp = d['createdAt'] as Timestamp?;
+                    final dateString = timestamp != null
+                        ? TimeOfDay.fromDateTime(timestamp.toDate()).format(context) // Just an example format
+                        : 'No date';
+
+                    return Card( // Wrap in Card for better UI
+                      margin: const EdgeInsets.symmetric(vertical: 4.0),
+                      child: ListTile(
+                        leading: Icon(Icons.route_outlined, color: theme.colorScheme.primary),
+                        title: Text(title, style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500)),
+                        subtitle: Text('$description\nAdded: $dateString'),
+                        isThreeLine: true,
+                      ),
+                    );
+                  },
                 );
               },
-              // ElevatedButtonTheme is applied from main.dart
-              child: const Text('Confirm Route'), // Ambiguous button text
             ),
           ],
         ),

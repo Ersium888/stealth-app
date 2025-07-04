@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart'; // Import LucideIcons
+import 'package:firebase_auth/firebase_auth.dart';        // Import FirebaseAuth for User type
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../services/auth_service.dart';                 // Import AuthService
 import 'move_screen.dart';
 import 'snap_screen.dart';
 import 'discover_screen.dart';
 import 'me_screen.dart';
+import 'login_screen.dart';                            // Import LoginScreen
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -13,7 +16,8 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _selectedIndex = 0; // Default to the first tab (Move)
+  int _selectedIndex = 0;
+  final AuthService _authService = AuthService(); // Instance of AuthService
 
   static const List<Widget> _widgetOptions = <Widget>[
     MoveScreen(),
@@ -30,43 +34,57 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // The theme (including BottomNavigationBarTheme) is now primarily driven by Material 3 defaults
-    // and ColorScheme.fromSeed in main.dart.
-    // Specific overrides in main.dart's theme will also apply if any were kept for BottomNavigationBar.
+    return StreamBuilder<User?>(
+      stream: _authService.userChanges,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()), // Show loading indicator while checking auth state
+          );
+        }
 
-    return Scaffold(
-      body: IndexedStack( // Use IndexedStack to keep state of inactive screens
-        index: _selectedIndex,
-        children: _widgetOptions,
-      ),
-      bottomNavigationBar: NavigationBar( // Using Material 3 NavigationBar
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: _onItemTapped,
-        // backgroundColor: Theme.of(context).colorScheme.surface, // M3 NavigationBar usually takes this from theme
-        // indicatorColor: Theme.of(context).colorScheme.secondaryContainer, // M3 indicator color
-        destinations: const <NavigationDestination>[
-          NavigationDestination(
-            icon: Icon(LucideIcons.siren), // Placeholder, using a distinct Lucide icon for Move
-            selectedIcon: Icon(LucideIcons.siren, color: Theme.of(context).colorScheme.primary), // Example: primary color for selected
-            label: 'Move',
-          ),
-          NavigationDestination(
-            icon: Icon(LucideIcons.camera),
-            selectedIcon: Icon(LucideIcons.camera, color: Theme.of(context).colorScheme.primary),
-            label: 'Snap',
-          ),
-          NavigationDestination(
-            icon: Icon(LucideIcons.search),
-            selectedIcon: Icon(LucideIcons.search, color: Theme.of(context).colorScheme.primary),
-            label: 'Discover',
-          ),
-          NavigationDestination(
-            icon: Icon(LucideIcons.userCircle2), // Using userCircle2 for a slightly different 'Me' icon
-            selectedIcon: Icon(LucideIcons.userCircle2, color: Theme.of(context).colorScheme.primary),
-            label: 'Me',
-          ),
-        ],
-      ),
+        if (snapshot.hasData && snapshot.data != null) {
+          // User is logged in, show the main app interface
+          return Scaffold(
+            body: IndexedStack(
+              index: _selectedIndex,
+              children: _widgetOptions,
+            ),
+            bottomNavigationBar: NavigationBar(
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: _onItemTapped,
+              destinations: <NavigationDestination>[
+                NavigationDestination(
+                  icon: const Icon(LucideIcons.siren),
+                  selectedIcon: Icon(LucideIcons.siren, color: Theme.of(context).colorScheme.primary),
+                  label: 'Move',
+                ),
+                NavigationDestination(
+                  icon: const Icon(LucideIcons.camera),
+                  selectedIcon: Icon(LucideIcons.camera, color: Theme.of(context).colorScheme.primary),
+                  label: 'Snap',
+                ),
+                NavigationDestination(
+                  icon: const Icon(LucideIcons.search),
+                  selectedIcon: Icon(LucideIcons.search, color: Theme.of(context).colorScheme.primary),
+                  label: 'Discover',
+                ),
+                NavigationDestination(
+                  icon: const Icon(LucideIcons.userCircle2),
+                  selectedIcon: Icon(LucideIcons.userCircle2, color: Theme.of(context).colorScheme.primary),
+                  label: 'Me',
+                ),
+              ],
+            ),
+          );
+        } else {
+          // User is not logged in, show LoginScreen
+          // Using a Navigator here allows LoginScreen to push RegisterScreen on top of itself
+          // without affecting the MainScreen's position in the widget tree if it were already there.
+          // However, since MainScreen is 'home', LoginScreen effectively becomes the initial view if not logged in.
+          return const LoginScreen();
+        }
+      },
     );
   }
 }
