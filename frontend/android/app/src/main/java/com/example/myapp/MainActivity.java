@@ -1,4 +1,4 @@
-package com.mlegacy.stealthapp;
+package com.example.myapp;
 
 import com.getcapacitor.BridgeActivity;
 
