@@ -29,15 +29,28 @@ jobs:
           cd frontend
           yarn build
 
-      - name: Install Capacitor CLI
-        run: npm install -g @capacitor/cli
-
       - name: Sync Capacitor with Android
         run: |
           cd frontend
-          npx cap sync android
+          ./node_modules/.bin/cap sync android
 
-      - name: Set up Java & Gradle
+      - name: Set up Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper/dists
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Set up Gradle
         uses: gradle/gradle-build-action@v2
 
       - name: Build APK
