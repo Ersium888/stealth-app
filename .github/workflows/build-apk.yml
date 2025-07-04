@@ -7,47 +7,47 @@ on:
 
 jobs:
   build:
-    name: Build React App and Android APK
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Node
+      - name: Set up Node.js 20
         uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: '20'
 
       - name: Install dependencies
-        working-directory: ./frontend
-        run: yarn install
+        run: |
+          npm install -g yarn
+          cd frontend
+          yarn install
 
       - name: Build React app
-        working-directory: ./frontend
-        run: yarn build
+        run: |
+          cd frontend
+          yarn build
 
       - name: Install Capacitor CLI
         run: npm install -g @capacitor/cli
 
       - name: Sync Capacitor with Android
-        working-directory: ./frontend
         run: |
+          cd frontend
           npx cap sync android
 
       - name: Set up Java & Gradle
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+        uses: gradle/gradle-build-action@v2
 
       - name: Build APK
-        working-directory: ./frontend/android
-        run: ./gradlew assembleDebug
+        run: |
+          cd frontend/android
+          ./gradlew assembleRelease
 
-      - name: Upload APK to GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload APK to GitHub Releases
+        uses: softprops/action-gh-release@v1
         with:
-          files: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+          files: frontend/android/app/build/outputs/apk/release/app-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
